@@ -1,0 +1,63 @@
+pipeline {
+    agent any
+
+    environment {
+        APP_NAME = "vmware-inventory"
+        NETWORK = "app-network"
+    }
+
+    stages {
+
+        stage('Clone Repo') {
+            steps {
+                git 'https://github.com/USERNAME/vmware-inventory-app.git'
+            }
+        }
+
+        stage('Build Green Image') {
+            steps {
+                sh 'docker build -t ${APP_NAME}:green .'
+            }
+        }
+
+        stage('Run Green Container') {
+            steps {
+                sh '''
+                docker stop green || true
+                docker rm green || true
+
+                docker run -d \
+                 --name green \
+                 --network ${NETWORK} \
+                 ${APP_NAME}:green
+                '''
+            }
+        }
+
+        stage('Health Check Green') {
+            steps {
+                sh 'sleep 10'
+            }
+        }
+
+        stage('Switch Traffic to Green') {
+            steps {
+                sh '''
+                sed -i 's/blue:8501/green:8501/' nginx/default.conf
+                docker exec nginx nginx -s reload
+                '''
+            }
+        }
+
+        stage('Remove Blue') {
+            steps {
+                sh '''
+                docker stop blue || true
+                docker rm blue || true
+                docker tag ${APP_NAME}:green ${APP_NAME}:blue
+                '''
+            }
+        }
+    }
+}
+
