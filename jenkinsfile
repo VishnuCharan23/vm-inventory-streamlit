@@ -10,7 +10,7 @@ pipeline {
 
         stage('Clone Repo') {
             steps {
-                git 'https://github.com/USERNAME/vmware-inventory-app.git'
+                git 'https://github.com/VishnuCharan23/vm-inventory-streamlit'
             }
         }
 
