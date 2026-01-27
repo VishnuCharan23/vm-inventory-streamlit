@@ -3,61 +3,85 @@ pipeline {
 
     environment {
         APP_NAME = "vmware-inventory"
-        NETWORK = "app-network"
+        NETWORK  = "app-network"
+        GREEN_CONTAINER = "green"
+        BLUE_CONTAINER  = "blue"
+        NGINX_CONTAINER = "nginx"
+        APP_PORT = "8501"
     }
 
     stages {
 
-        stage('Clone Repo') {
+        stage('Checkout Source') {
             steps {
-                git 'https://github.com/VishnuCharan23/vm-inventory-streamlit'
+                // Jenkins already knows the repo & branch from job config
+                checkout scm
             }
         }
 
         stage('Build Green Image') {
             steps {
-                sh 'docker build -t ${APP_NAME}:green .'
+                sh """
+                docker build -t ${APP_NAME}:green .
+                """
             }
         }
 
         stage('Run Green Container') {
             steps {
-                sh '''
-                docker stop green || true
-                docker rm green || true
+                sh """
+                docker network inspect ${NETWORK} >/dev/null 2>&1 || \
+                docker network create ${NETWORK}
+
+                docker stop ${GREEN_CONTAINER} || true
+                docker rm ${GREEN_CONTAINER} || true
 
                 docker run -d \
-                 --name green \
-                 --network ${NETWORK} \
-                 ${APP_NAME}:green
-                '''
+                  --name ${GREEN_CONTAINER} \
+                  --network ${NETWORK} \
+                  -p ${APP_PORT}:${APP_PORT} \
+                  ${APP_NAME}:green
+                """
             }
         }
 
         stage('Health Check Green') {
             steps {
-                sh 'sleep 10'
+                sh """
+                echo "Waiting for Green app..."
+                sleep 15
+                curl -f http://localhost:${APP_PORT} || exit 1
+                """
             }
         }
 
         stage('Switch Traffic to Green') {
             steps {
-                sh '''
-                sed -i 's/blue:8501/green:8501/' nginx/default.conf
-                docker exec nginx nginx -s reload
-                '''
+                sh """
+                sed -i 's/${BLUE_CONTAINER}:${APP_PORT}/${GREEN_CONTAINER}:${APP_PORT}/' nginx/default.conf
+                docker exec ${NGINX_CONTAINER} nginx -s reload
+                """
             }
         }
 
         stage('Remove Blue') {
             steps {
-                sh '''
-                docker stop blue || true
-                docker rm blue || true
+                sh """
+                docker stop ${BLUE_CONTAINER} || true
+                docker rm ${BLUE_CONTAINER} || true
+
                 docker tag ${APP_NAME}:green ${APP_NAME}:blue
-                '''
+                """
             }
         }
     }
-}
 
+    post {
+        failure {
+            echo "❌ Deployment failed. Blue is still serving traffic."
+        }
+        success {
+            echo "✅ Blue-Green deployment completed successfully!"
+        }
+    }
+}
