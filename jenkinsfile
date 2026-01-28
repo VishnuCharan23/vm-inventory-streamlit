@@ -68,13 +68,13 @@ pipeline {
 
         stage('Switch Traffic to Green') {
             steps {
-                sh '''
+                sh """
                 echo "🔁 Switching NGINX traffic to Green..."
 
-                docker exec ${NGINX_CONTAINER} sh -c '
+                docker exec ${NGINX_CONTAINER} sh -c "
 cat > /etc/nginx/conf.d/default.conf <<EOF
 upstream streamlit_app {
-    server '"${GREEN_CONTAINER}:${APP_PORT}"';
+    server ${GREEN_CONTAINER}:${APP_PORT};
 }
 
 server {
@@ -82,14 +82,15 @@ server {
 
     location / {
         proxy_pass http://streamlit_app;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header Host \\\$host;
+        proxy_set_header X-Real-IP \\\$remote_addr;
     }
 }
 EOF
-'
+"
+
                 docker exec ${NGINX_CONTAINER} nginx -s reload
-                '''
+                """
             }
         }
 
