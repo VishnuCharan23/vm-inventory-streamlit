@@ -48,7 +48,7 @@ pipeline {
                 sh '''
                 echo "🔍 Checking Green container health..."
 
-                for i in {1..30}; do
+                for i in $(seq 1 30); do
                   if docker exec ${GREEN_CONTAINER} \
                      curl -sf http://127.0.0.1:${APP_PORT}/_stcore/health; then
                     echo "✅ Green is healthy"
